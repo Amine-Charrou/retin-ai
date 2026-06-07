@@ -10,6 +10,8 @@ venv/
 
 # Model weights
 backend/model/weights/
+backend/model/*.onnx
+backend/model/*.onnx.data
 
 # IDE
 .vscode/
@@ -22,3 +24,7 @@ Thumbs.db
 # Node
 node_modules/
 .next/
+
+# Backend Data
+backend/retinai.db
+backend/static/
