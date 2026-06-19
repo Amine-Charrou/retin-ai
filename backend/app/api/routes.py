@@ -9,14 +9,15 @@ from pathlib import Path
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 
-from backend.app.config import UPLOADS_DIR, HEATMAPS_DIR
+from backend.app.config import UPLOADS_DIR, HEATMAPS_DIR, REPORTS_DIR
 from backend.app.database import (
     create_patient, list_patients, get_patient,
-    create_analysis, list_analyses
+    create_analysis, list_analyses, get_analysis, delete_analysis_db
 )
 from backend.app.api.schemas import PatientCreate, PatientOut, AnalysisOut
 from backend.model.predict import predict_from_pil, CLASS_NAMES
 from backend.model.gradcam import generate_heatmap
+from backend.app.agents.orchestrator import run_workflow
 
 router = APIRouter()
 
@@ -99,7 +100,14 @@ async def add_patient(patient: PatientCreate):
 
 @router.get("/api/dashboard", response_model=list[AnalysisOut])
 async def get_dashboard():
-    return list_analyses()
+    analyses = list_analyses()
+    for a in analyses:
+        pdf_filename = f"{a['id']}.pdf"
+        if (REPORTS_DIR / pdf_filename).exists():
+            a["pdf_url"] = f"/static/reports/{pdf_filename}"
+        else:
+            a["pdf_url"] = None
+    return analyses
 
 
 # ── Analyze ───────────────────────────────────────────────────────────────────
@@ -140,7 +148,28 @@ async def analyze_image(
     referable = 1 if stage >= 2 else 0
     urgency = URGENCIES[stage]
     description = f"Stade {stage} - {STAGE_DESCRIPTIONS[stage]}"
-    clinical_report = _generate_report(stage, confidence, patient_id, patient["name"])
+    
+    # ── Run LangGraph multi-agent report workflow ─────────────────────────
+    workflow_inputs = {
+        "analysis_id": analysis_id,
+        "patient_id": patient_id,
+        "patient_name": patient["name"],
+        "patient_gender": patient["gender"],
+        "patient_birthdate": patient.get("birthdate"),
+        "image_path": str(image_path),
+        "heatmap_path": str(heatmap_path),
+        "stage": stage,
+        "confidence": confidence
+    }
+    
+    try:
+        workflow_result = run_workflow(workflow_inputs)
+        clinical_report = workflow_result.get("clinical_report")
+        pdf_url = workflow_result.get("pdf_url")
+    except Exception as e:
+        print(f"[API Workflow Error] {e} — falling back to static report template.")
+        clinical_report = _generate_report(stage, confidence, patient_id, patient["name"])
+        pdf_url = None
 
     analysis_data = {
         "id": analysis_id,
@@ -153,6 +182,7 @@ async def analyze_image(
         "heatmap_path": f"/static/heatmaps/{heatmap_filename}",
         "description": description,
         "clinical_report": clinical_report,
+        "pdf_url": pdf_url,
         "created_at": timestamp,
     }
 
@@ -164,3 +194,44 @@ async def analyze_image(
     analysis_data["patient_gender"] = patient["gender"]
 
     return analysis_data
+
+
+@router.delete("/api/analyses/{analysis_id}")
+async def delete_analysis_endpoint(analysis_id: str):
+    analysis = get_analysis(analysis_id)
+    if not analysis:
+        raise HTTPException(status_code=404, detail="Analyse introuvable.")
+
+    # 1. Delete original fundus image from disk
+    if analysis.get("image_path"):
+        filename = Path(analysis["image_path"]).name
+        image_filepath = UPLOADS_DIR / filename
+        if image_filepath.exists() and image_filepath.is_file():
+            try:
+                image_filepath.unlink()
+            except Exception as e:
+                print(f"[Delete Error] Could not remove image file {image_filepath}: {e}")
+
+    # 2. Delete heatmap image from disk
+    if analysis.get("heatmap_path"):
+        filename = Path(analysis["heatmap_path"]).name
+        heatmap_filepath = HEATMAPS_DIR / filename
+        if heatmap_filepath.exists() and heatmap_filepath.is_file():
+            try:
+                heatmap_filepath.unlink()
+            except Exception as e:
+                print(f"[Delete Error] Could not remove heatmap file {heatmap_filepath}: {e}")
+
+    # 3. Delete PDF report from disk
+    pdf_filename = f"{analysis_id}.pdf"
+    pdf_filepath = REPORTS_DIR / pdf_filename
+    if pdf_filepath.exists() and pdf_filepath.is_file():
+        try:
+            pdf_filepath.unlink()
+        except Exception as e:
+            print(f"[Delete Error] Could not remove PDF file {pdf_filepath}: {e}")
+
+    # 4. Remove from SQLite DB
+    delete_analysis_db(analysis_id)
+
+    return {"status": "ok", "message": f"Analyse {analysis_id} supprimee avec succes."}

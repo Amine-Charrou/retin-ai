@@ -8,7 +8,7 @@ from backend.app.config import DATABASE_PATH
 
 
 def init_db():
-    """Create tables if they don't exist."""
+    """Create tables if they don't exist and seed default patients."""
     with get_db() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS patients (
@@ -32,6 +32,12 @@ def init_db():
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (patient_id) REFERENCES patients(id)
             );
+
+            INSERT OR IGNORE INTO patients (id, name, birthdate, gender) VALUES
+            ('P-4421', 'Amine Charrou', '1998-05-12', 'M'),
+            ('P-8802', 'Hiba Loughzal', '2001-08-24', 'F'),
+            ('P-1294', 'Hayat Latif', '1975-11-03', 'F'),
+            ('P-5509', 'Yassine Basskar', '1992-04-17', 'M');
         """)
 
 
@@ -97,3 +103,16 @@ def list_analyses():
             ORDER BY a.created_at DESC
         """).fetchall()
         return [dict(r) for r in rows]
+
+
+def get_analysis(analysis_id: str):
+    """Retrieve a single analysis record by ID."""
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM analyses WHERE id = ?", (analysis_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def delete_analysis_db(analysis_id: str):
+    """Delete an analysis record by ID."""
+    with get_db() as conn:
+        conn.execute("DELETE FROM analyses WHERE id = ?", (analysis_id,))

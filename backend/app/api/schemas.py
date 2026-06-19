@@ -33,4 +33,5 @@ class AnalysisOut(BaseModel):
     heatmap_path: str
     description: Optional[str] = None
     clinical_report: Optional[str] = None
+    pdf_url: Optional[str] = None
     created_at: str

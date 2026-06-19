@@ -16,10 +16,12 @@ MODEL_DIR = BACKEND_DIR / "model"
 STATIC_DIR = BACKEND_DIR / "static"
 UPLOADS_DIR = STATIC_DIR / "uploads"
 HEATMAPS_DIR = STATIC_DIR / "heatmaps"
+REPORTS_DIR = STATIC_DIR / "reports"
 
 # Ensure directories exist
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 HEATMAPS_DIR.mkdir(parents=True, exist_ok=True)
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Database ──────────────────────────────────────────────────────────────────
 DATABASE_PATH = BACKEND_DIR / "retinai.db"

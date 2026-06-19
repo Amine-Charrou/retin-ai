@@ -2,6 +2,15 @@
 
 import React, { useState, useEffect } from "react";
 
+// --- COMPTES DOCTEURS PAR DÉFAUT ---
+const INITIAL_DOCTORS = [
+  { id: "Ahmed", name: "Dr. Ahmed Chmourk", initials: "AC", role: "Clinicien Chef - ENSA", password: "123" },
+  { id: "Amine", name: "Dr. Amine Charrou", initials: "AC", role: "Ophtalmologue Référent", password: "123" },
+  { id: "Hiba", name: "Dr. Hiba Loughzal", initials: "HL", role: "Interne de Service", password: "123" },
+  { id: "Hayat", name: "Dr. Hayat Latif", initials: "HL", role: "Spécialiste Rétine", password: "123" },
+  { id: "Yassine", name: "Dr. Yassine Basskar", initials: "YB", role: "Chef de Clinique", password: "123" }
+];
+
 // --- BASE DE DONNÉES CLINIQUE INITIALE DE SIMULATION (FIDELE AU PDF) ---
 const INITIAL_PATIENTS = [
   { id: "P-4421", name: "Amine Charrou", birthdate: "1998-05-12", gender: "M" },
@@ -22,7 +31,7 @@ const INITIAL_ANALYSES = [
     referable: true,
     urgency: "Sous 3 mois",
     image: "https://images.unsplash.com/photo-1579684389782-64d84b5e905d?auto=format&fit=crop&q=80&w=600",
-    heatmap: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&q=80&w=600",
+    heatmap: "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&q=80&w=600",
     description: "Stade 2 - Rétinopathie diabétique modérée. Présence de multiples microanévrismes, d'hémorragies rétiniennes légères et d'exsudats durs.",
     report: `### 🩺 RAPPORT D'ANALYSE CLINIQUE PAR IA - RetinAI
 **Généré le** : 2026-05-22 | **Identifiant Patient** : \`P-4421\` | **Nom** : **Amine Charrou**
@@ -83,7 +92,7 @@ Rétine saine et homogène. La papille optique présente des contours nets, la m
     referable: true,
     urgency: "Urgence absolue !",
     image: "https://images.unsplash.com/photo-1579684389782-64d84b5e905d?auto=format&fit=crop&q=80&w=600",
-    heatmap: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&q=80&w=600",
+    heatmap: "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&q=80&w=600",
     description: "Stade 4 - Rétinopathie diabétique proliférative. Néovascularisation active, hémorragie vitréenne, risque imminent de cécité.",
     report: `### 🩺 RAPPORT D'ANALYSE CLINIQUE PAR IA - RetinAI
 **Généré le** : 2026-05-21 | **Identifiant Patient** : \`P-1294\` | **Nom** : **Hayat Latif**
@@ -100,6 +109,128 @@ Néovascularisation vitréenne active avec signes clairs d'hémorragie préréti
 ];
 
 export default function RetinAIDashboard() {
+  // --- ÉTATS DOCTEURS & PORTAIL D'AUTHENTICATION ---
+  const [doctors, setDoctors] = useState(INITIAL_DOCTORS);
+  const [currentDoctor, setCurrentDoctor] = useState(null);
+  const [authMode, setAuthMode] = useState("login"); // login, signup
+  const [authUsername, setAuthUsername] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authFullName, setAuthFullName] = useState("");
+  const [authRole, setAuthRole] = useState("Ophtalmologue Référent");
+  const [authError, setAuthError] = useState("");
+
+  const handleSetCurrentDoctor = (doc) => {
+    setCurrentDoctor(doc);
+    if (typeof window !== "undefined") {
+      if (doc) {
+        localStorage.setItem("retinai_current_doctor", JSON.stringify(doc));
+      } else {
+        localStorage.removeItem("retinai_current_doctor");
+      }
+    }
+  };
+
+  const handleSetDoctors = (newDocs) => {
+    setDoctors(newDocs);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("retinai_doctors", JSON.stringify(newDocs));
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedDoc = localStorage.getItem("retinai_current_doctor");
+      if (savedDoc) {
+        try {
+          setCurrentDoctor(JSON.parse(savedDoc));
+        } catch (e) {
+          console.error("Failed to parse saved doctor", e);
+        }
+      }
+      const savedDocs = localStorage.getItem("retinai_doctors");
+      if (savedDocs) {
+        try {
+          setDoctors(JSON.parse(savedDocs));
+        } catch (e) {
+          console.error("Failed to parse saved doctors", e);
+        }
+      }
+    }
+  }, []);
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    setAuthError("");
+    const doc = doctors.find(
+      (d) => d.id.toLowerCase() === authUsername.toLowerCase().trim() && d.password === authPassword
+    );
+    if (doc) {
+      handleSetCurrentDoctor(doc);
+      setAuthUsername("");
+      setAuthPassword("");
+    } else {
+      setAuthError("Identifiant ou mot de passe incorrect.");
+    }
+  };
+
+  const handleSignUp = (e) => {
+    e.preventDefault();
+    setAuthError("");
+    
+    if (!authUsername.trim() || !authPassword || !authFullName.trim()) {
+      setAuthError("Veuillez remplir tous les champs.");
+      return;
+    }
+
+    const exists = doctors.some(
+      (d) => d.id.toLowerCase() === authUsername.toLowerCase().trim()
+    );
+    if (exists) {
+      setAuthError("Cet identifiant est déjà utilisé.");
+      return;
+    }
+
+    const nameParts = authFullName.trim().split(" ");
+    let initials = "DR";
+    if (nameParts.length >= 2) {
+      const cleanParts = nameParts.filter(
+        (p) => !/^(dr|dr\.|doctor|docteur)$/i.test(p)
+      );
+      if (cleanParts.length >= 2) {
+        initials = (cleanParts[0][0] + cleanParts[1][0]).toUpperCase();
+      } else if (cleanParts.length === 1) {
+        initials = cleanParts[0].slice(0, 2).toUpperCase();
+      }
+    } else if (nameParts.length === 1) {
+      initials = nameParts[0].slice(0, 2).toUpperCase();
+    }
+
+    const formattedName = authFullName.startsWith("Dr.") || authFullName.startsWith("Dr ")
+      ? authFullName.trim()
+      : `Dr. ${authFullName.trim()}`;
+
+    const newDoc = {
+      id: authUsername.trim(),
+      name: formattedName,
+      initials,
+      role: authRole,
+      password: authPassword
+    };
+
+    const updatedDocs = [...doctors, newDoc];
+    handleSetDoctors(updatedDocs);
+    handleSetCurrentDoctor(newDoc);
+    
+    setAuthUsername("");
+    setAuthPassword("");
+    setAuthFullName("");
+    setAuthRole("Ophtalmologue Référent");
+  };
+
+  const handleLogout = () => {
+    handleSetCurrentDoctor(null);
+  };
+
   // --- ÉTATS GÉNÉRAUX DE NAVIGATION ET DONNÉES ---
   const [activeTab, setActiveTab] = useState("dashboard"); // dashboard, analyze, history, settings
   const [patients, setPatients] = useState(INITIAL_PATIENTS);
@@ -129,6 +260,11 @@ export default function RetinAIDashboard() {
   // --- ÉTATS D'AFFICHAGE DU VIEWER ---
   const [currentAnalysis, setCurrentAnalysis] = useState(INITIAL_ANALYSES[0]);
   const [gradcamOpacity, setGradcamOpacity] = useState(50);
+
+  // --- ÉTATS PRELOADER & CONFIRMATIONS ---
+  const [appLoading, setAppLoading] = useState(true);
+  const [loadingProgressText, setLoadingProgressText] = useState("Initialisation du système...");
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   
   // --- ÉTATS SERVEUR ACTIF ---
   const [backendOnline, setBackendOnline] = useState(false);
@@ -139,6 +275,40 @@ export default function RetinAIDashboard() {
   const [newPatientGender, setNewPatientGender] = useState("M");
   const [newPatientBirth, setNewPatientBirth] = useState("");
   const [newPatientId, setNewPatientId] = useState("");
+
+  // --- SUPPRESSION D'UNE ANALYSE CLINIQUE (BD + DISQUE) ---
+  const executeDeleteAnalysis = async (id) => {
+    try {
+      if (backendOnline) {
+        const res = await fetch(`${API_URL}/api/analyses/${id}`, {
+          method: "DELETE"
+        });
+        if (!res.ok) {
+          throw new Error("Erreur serveur lors de la suppression de l'analyse.");
+        }
+      }
+      
+      // Update state
+      setAnalyses(prev => {
+        const filtered = prev.filter(a => a.id !== id);
+        if (currentAnalysis && currentAnalysis.id === id) {
+          if (filtered.length > 0) {
+            setCurrentAnalysis(filtered[0]);
+          } else {
+            setCurrentAnalysis(null);
+            setViewState("upload");
+          }
+        }
+        return filtered;
+      });
+      alert(`L'analyse ${id} a été supprimée avec succès.`);
+    } catch (err) {
+      console.error(err);
+      alert(`Erreur lors de la suppression : ${err.message}`);
+    } finally {
+      setDeleteConfirmId(null);
+    }
+  };
 
   // --- COMPILATEUR ET GÉNÉRATEUR DE RAPPORT PDF CLINIQUE ---
   const downloadAnalysisPDF = (analysis) => {
@@ -490,8 +660,9 @@ export default function RetinAIDashboard() {
             <div style="margin-top: 40px; font-weight: bold; color: #0284c7;">APPROUVÉ PAR IA</div>
           </div>
           <div class="signature-box">
-            Signature de l'Ophtalmologue Référent
-            <div style="margin-top: 45px; font-style: italic; color: #cbd5e1;">Signature & Cachet</div>
+            Signature de l'Ophtalmologue Référent<br/>
+            <strong>${currentDoctor ? currentDoctor.name : "Dr. Ahmed Chmourk"}</strong>
+            <div style="margin-top: 25px; font-style: italic; color: #cbd5e1;">Signature & Cachet</div>
           </div>
         </div>
 
@@ -521,15 +692,18 @@ export default function RetinAIDashboard() {
   useEffect(() => {
     async function checkBackend() {
       try {
+        setLoadingProgressText("Connexion à la passerelle FastAPI...");
         const res = await fetch(`${API_URL}/`);
         if (res.ok) {
           setBackendOnline(true);
+          setLoadingProgressText("Chargement des dossiers patients...");
           // Charger les vrais patients
           const pRes = await fetch(`${API_URL}/api/patients`);
           if (pRes.ok) {
             const pData = await pRes.json();
             if (pData.length > 0) setPatients(pData);
           }
+          setLoadingProgressText("Synchronisation de l'historique clinique...");
           // Charger les vraies analyses
           const aRes = await fetch(`${API_URL}/api/dashboard`);
           if (aRes.ok) {
@@ -542,13 +716,13 @@ export default function RetinAIDashboard() {
                 gender: a.patient_gender || "M",
                 stage: a.stage,
                 confidence: a.confidence,
-                date: a.created_at.replace("T", " ").slice(0, 16),
+                date: (a.created_at || "").replace("T", " ").slice(0, 16),
                 referable: a.referable === 1 || a.referable === true,
-                urgency: a.urgency,
-                image: `${API_URL}${a.image_path}`,
-                heatmap: `${API_URL}${a.heatmap_path}`,
-                description: a.description,
-                report: a.clinical_report
+                urgency: a.urgency || "Normal",
+                image: a.image_path ? `${API_URL}${a.image_path}` : "",
+                heatmap: a.heatmap_path ? `${API_URL}${a.heatmap_path}` : "",
+                description: a.description || "",
+                report: a.clinical_report || ""
               }));
               setAnalyses(formattedAnalyses);
               setCurrentAnalysis(formattedAnalyses[0]);
@@ -558,6 +732,11 @@ export default function RetinAIDashboard() {
       } catch (err) {
         console.warn("[RetinAI] Mode simulation actif (le backend FastAPI à localhost:8000 est hors-ligne).");
         setBackendOnline(false);
+      } finally {
+        setLoadingProgressText("Démarrage clinique de RetinAI...");
+        setTimeout(() => {
+          setAppLoading(false);
+        }, 1500);
       }
     }
     checkBackend();
@@ -773,7 +952,7 @@ export default function RetinAIDashboard() {
         referable: randomStage >= 2,
         urgency: urgencies[randomStage],
         image: previewUrl || "https://images.unsplash.com/photo-1579684389782-64d84b5e905d?auto=format&fit=crop&q=80&w=500",
-        heatmap: randomStage > 0 ? "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&q=80&w=500" : "",
+        heatmap: randomStage > 0 ? "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&q=80&w=500" : "",
         description: `Stade ${randomStage} - ${stagesText[randomStage]}. Évaluation effectuée en mode simulation hors-ligne.`,
         report: `### 🩺 RAPPORT D'ANALYSE CLINIQUE PAR IA - RetinAI (Simulation)
 **Généré le** : ${new Date().toISOString().slice(0, 10)} | **Identifiant Patient** : \`${selectedPatientId}\` | **Nom** : **${pName}**
@@ -858,6 +1037,150 @@ L'image prétraitée a été analysée par les agents cliniques. L'activation Gr
     }
   };
 
+  if (!appLoading && !currentDoctor) {
+    return (
+      <div className="auth-page-wrapper">
+        <div className="auth-bg-glow-1"></div>
+        <div className="auth-bg-glow-2"></div>
+        
+        <div className="auth-glass-card">
+          <div className="auth-logo-header">
+            <div className="auth-logo-icon">
+              <i className="fa-solid fa-circle-nodes"></i>
+            </div>
+            <div className="auth-logo-title">Retin<span>AI</span></div>
+            <p style={{ color: "#94a3b8", fontSize: "14px", textAlign: "center", marginTop: "4px" }}>
+              Portail Clinique Sécurisé
+            </p>
+          </div>
+
+          <div className="auth-tabs">
+            <button 
+              className={`auth-tab-btn ${authMode === "login" ? "active" : ""}`}
+              onClick={() => { setAuthMode("login"); setAuthError(""); }}
+            >
+              Se connecter
+            </button>
+            <button 
+              className={`auth-tab-btn ${authMode === "signup" ? "active" : ""}`}
+              onClick={() => { setAuthMode("signup"); setAuthError(""); }}
+            >
+              S'inscrire
+            </button>
+          </div>
+
+          {authError && (
+            <div style={{ 
+              background: "rgba(225, 29, 72, 0.1)", 
+              border: "1px solid rgba(225, 29, 72, 0.2)", 
+              color: "#f43f5e", 
+              padding: "12px", 
+              borderRadius: "8px", 
+              fontSize: "13px", 
+              marginBottom: "20px",
+              textAlign: "center"
+            }}>
+              <i className="fa-solid fa-triangle-exclamation" style={{ marginRight: "8px" }}></i>
+              {authError}
+            </div>
+          )}
+
+          {authMode === "login" ? (
+            <form onSubmit={handleLogin}>
+              <div className="auth-form-group">
+                <label htmlFor="login-username">Identifiant Docteur</label>
+                <input 
+                  id="login-username"
+                  type="text" 
+                  className="auth-input-field" 
+                  placeholder="Ex: Ahmed"
+                  value={authUsername}
+                  onChange={(e) => setAuthUsername(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="auth-form-group">
+                <label htmlFor="login-password">Mot de passe</label>
+                <input 
+                  id="login-password"
+                  type="password" 
+                  className="auth-input-field" 
+                  placeholder="••••••••"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  required
+                />
+              </div>
+              <button type="submit" className="auth-submit-btn">
+                <i className="fa-solid fa-right-to-bracket"></i>
+                Se connecter au service
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleSignUp}>
+              <div className="auth-form-group">
+                <label htmlFor="signup-username">Identifiant Docteur</label>
+                <input 
+                  id="signup-username"
+                  type="text" 
+                  className="auth-input-field" 
+                  placeholder="Ex: amine2"
+                  value={authUsername}
+                  onChange={(e) => setAuthUsername(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="auth-form-group">
+                <label htmlFor="signup-fullname">Nom Complet</label>
+                <input 
+                  id="signup-fullname"
+                  type="text" 
+                  className="auth-input-field" 
+                  placeholder="Ex: Dr. Jean Dupont"
+                  value={authFullName}
+                  onChange={(e) => setAuthFullName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="auth-form-group">
+                <label htmlFor="signup-role">Spécialité / Rôle</label>
+                <select 
+                  id="signup-role"
+                  className="auth-input-field"
+                  style={{ background: "#1e293b", color: "#ffffff" }}
+                  value={authRole}
+                  onChange={(e) => setAuthRole(e.target.value)}
+                >
+                  <option value="Ophtalmologue Référent">Ophtalmologue Référent</option>
+                  <option value="Clinicien Chef - ENSA">Clinicien Chef - ENSA</option>
+                  <option value="Chef de Clinique">Chef de Clinique</option>
+                  <option value="Interne de Service">Interne de Service</option>
+                  <option value="Spécialiste Rétine">Spécialiste Rétine</option>
+                </select>
+              </div>
+              <div className="auth-form-group">
+                <label htmlFor="signup-password">Mot de passe</label>
+                <input 
+                  id="signup-password"
+                  type="password" 
+                  className="auth-input-field" 
+                  placeholder="Créer un mot de passe"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  required
+                />
+              </div>
+              <button type="submit" className="auth-submit-btn">
+                <i className="fa-solid fa-user-plus"></i>
+                Créer mon compte clinique
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", width: "100%", minHeight: "100vh" }}>
       
@@ -907,10 +1230,19 @@ L'image prétraitée a été analysée par les agents cliniques. L'activation Gr
         </ul>
 
         <div className="nav-footer">
-          <div className="avatar">AC</div>
+          <div className="avatar">{currentDoctor?.initials || "DR"}</div>
           <div className="avatar-info">
-            <h4>Dr. Ahmed Chmourk</h4>
-            <p>Clinicien Chef - ENSA</p>
+            <h4>{currentDoctor?.name || "Médecin Connecté"}</h4>
+            <p>{currentDoctor?.role || "Ophtalmologie"}</p>
+          </div>
+          <div className="logout-btn-wrap">
+            <button 
+              className="logout-btn-action" 
+              onClick={handleLogout}
+              title="Se déconnecter"
+            >
+              <i className="fa-solid fa-right-from-bracket"></i>
+            </button>
           </div>
         </div>
       </aside>
@@ -1049,13 +1381,20 @@ L'image prétraitée a été analysée par les agents cliniques. L'activation Gr
                         <td style={{ color: a.referable ? "var(--danger)" : "var(--success)", fontWeight: a.referable ? 600 : 500 }}>
                           {a.referable ? "⚠️ Référable" : "✅ Non référable"}
                         </td>
-                        <td>
+                        <td style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                           <button 
                             className="btn btn-outline" 
                             style={{ padding: "6px 12px", fontSize: "13px" }}
                             onClick={() => openAnalysis(a.id)}
                           >
                             Ouvrir
+                          </button>
+                          <button 
+                            className="delete-btn-action" 
+                            onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(a.id); }}
+                            title="Supprimer l'analyse"
+                          >
+                            <i className="fa-solid fa-trash"></i>
                           </button>
                         </td>
                       </tr>
@@ -1297,7 +1636,7 @@ L'image prétraitée a été analysée par les agents cliniques. L'activation Gr
                         <i className="fa-solid fa-circle-radiation"></i> Superposition Grad-CAM (Heatmap)
                       </div>
                       <div className="image-frame" style={{ position: "relative" }}>
-                        <img src={currentAnalysis.image} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 1 }} alt="Original Underlay" />
+                        <img src={currentAnalysis.image} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 1 }} alt="Original Underlay" />
                         {currentAnalysis.heatmap && (
                           <img 
                             src={currentAnalysis.heatmap} 
@@ -1307,7 +1646,7 @@ L'image prétraitée a été analysée par les agents cliniques. L'activation Gr
                               left: 0, 
                               width: "100%", 
                               height: "100%", 
-                              objectFit: "cover", 
+                              objectFit: "contain", 
                               zIndex: 2, 
                               mixBlendMode: "screen", 
                               opacity: gradcamOpacity / 100 
@@ -1464,13 +1803,20 @@ L'image prétraitée a été analysée par les agents cliniques. L'activation Gr
                       <td style={{ color: a.referable ? "var(--danger)" : "var(--success)", fontWeight: a.referable ? 600 : 500 }}>
                         {a.referable ? "⚠️ Référable" : "✅ Non référable"}
                       </td>
-                      <td>
+                      <td style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                         <button 
                           className="btn btn-outline" 
                           style={{ padding: "6px 12px", fontSize: "13px" }}
                           onClick={() => openAnalysis(a.id)}
                         >
                           Ouvrir
+                        </button>
+                        <button 
+                          className="delete-btn-action" 
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(a.id); }}
+                          title="Supprimer l'analyse"
+                        >
+                          <i className="fa-solid fa-trash"></i>
                         </button>
                       </td>
                     </tr>
@@ -1574,6 +1920,50 @@ L'image prétraitée a été analysée par les agents cliniques. L'activation Gr
         )}
 
       </main>
+
+      {/* ================= MODALS & OVERLAYS SYSTÈME ================= */}
+      {appLoading && (
+        <div className="preloader-overlay">
+          <div className="preloader-logo-container">
+            <div className="preloader-logo-glow"></div>
+            <div className="preloader-spinner-ring"></div>
+            <div className="preloader-logo-icon">
+              <i className="fa-solid fa-circle-nodes"></i>
+            </div>
+          </div>
+          <div className="preloader-logo-text">Retin<span>AI</span></div>
+          <div className="preloader-status">{loadingProgressText}</div>
+        </div>
+      )}
+
+      {deleteConfirmId && (
+        <div className="modal-backdrop">
+          <div className="modal-confirm-dialog">
+            <div className="modal-header-danger">
+              <div className="modal-danger-icon">
+                <i className="fa-solid fa-triangle-exclamation"></i>
+              </div>
+              <div className="modal-danger-title">Supprimer l'analyse</div>
+            </div>
+            <div className="modal-danger-body">
+              Êtes-vous sûr de vouloir supprimer définitivement l'analyse <strong>{deleteConfirmId}</strong> ? 
+              Cette action supprimera également les fichiers originaux, la carte Grad-CAM et le PDF clinique de manière définitive.
+            </div>
+            <div className="modal-danger-footer">
+              <button className="btn btn-outline" style={{ padding: "8px 16px" }} onClick={() => setDeleteConfirmId(null)}>
+                Annuler
+              </button>
+              <button 
+                className="btn" 
+                style={{ padding: "8px 16px", backgroundColor: "var(--danger)", color: "white", border: "none" }} 
+                onClick={() => executeDeleteAnalysis(deleteConfirmId)}
+              >
+                Supprimer définitivement
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
